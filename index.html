@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3x3 Puzzle</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #score {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        #info-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #info-button:hover {
+            background: #0056b3;
+        }
+        #puzzle-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            margin-top: 20px;
+        }
+        #original, #puzzle {
+            display: grid;
+            grid-template-columns: repeat(3, 200px);
+            grid-gap: 5px;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .tile {
+            width: 200px;
+            height: 200px;
+            background-size: 600px 600px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: transform 0.2s;
+        }
+        .tile:hover {
+            transform: scale(1.05);
+        }
+        @media (max-width: 1310px) {
+            #original {
+                display: none;
+            }
+            #puzzle {
+                grid-template-columns: repeat(3, 100px);
+            }
+            .tile {
+                width: 100px;
+                height: 100px;
+                background-size: 300px 300px;
+            }
+            #mobile-controls {
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                margin-top: 20px;
+            }
+            #swap-button, #undo-button {
+                padding: 50px 60px;
+                font-size: 20px;
+                background: #007BFF;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background 0.3s;
+            }
+            #swap-button:hover, #undo-button:hover {
+                background: #0056b3;
+            }
+        }
+    </style>
+</head>
+<body>
+<h1>3x3 Puzzle</h1>
+<div id="score">Score: 0</div>
+<button id="info-button" onclick="showInfo()">Info</button>
+<div id="puzzle-container">
+    <div id="original"></div>
+    <div id="puzzle"></div>
+</div>
+<div id="mobile-controls" style="display: none;">
+    <button id="swap-button" onclick="swapTwoTiles()">Swap</button>
+    <button id="undo-button" onclick="undoSwap()">Undo</button>
+</div>
+<script>
+    let userId = null;
+    const serverUrl = 'ip:port'; // Укажите актуальный URL сервера
+
+    async function getUserId() {
+        try {
+            const response = await fetch(`${serverUrl}/create-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await response.json();
+            userId = data.data.public_id;
+        } catch (error) {
+            console.error('Ошибка получения ID пользователя:', error);
+        }
+    }
+
+    async function sendData(is_finished) {
+        if (!userId) return;
+        try {
+            await fetch(`${serverUrl}/update-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ "public_id":userId, "steps": score, "is_finished": is_finished})
+            });
+        } catch (error) {
+            console.error('Ошибка отправки количества ходов:', error);
+        }
+    }
+
+    let lastMove = null;
+    let currentPositions = [];
+    let score = 0;
+    const imagePath = 'banana.png';
+
+    window.onload = async function() {
+        await initializePuzzle(imagePath);
+        showOriginalImage(imagePath);
+        handleResize();
+    };
+
+    async function initializePuzzle(imgSrc) {
+        await getUserId();
+        currentPositions = [...Array(9).keys()].sort(() => Math.random() - 0.5);
+        lastMove = null;
+        score = 0;
+        updateScore();
+        renderPuzzle(imgSrc);
+    }
+
+    function renderPuzzle(imgSrc) {
+        const puzzle = document.getElementById('puzzle');
+        puzzle.innerHTML = '';
+        currentPositions.forEach((pos, i) => {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+            tile.style.backgroundImage = `url(${imgSrc})`;
+            tile.style.backgroundPosition = `${-200 * (pos % 3)}px ${-200 * Math.floor(pos / 3)}px`;
+            tile.dataset.index = i;
+            puzzle.appendChild(tile);
+        });
+        checkCompletion();
+    }
+
+    function showOriginalImage(imgSrc) {
+        const original = document.getElementById('original');
+        original.innerHTML = '';
+        for (let i = 0; i < 9; i++) {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+            tile.style.backgroundImage = `url(${imgSrc})`;
+            tile.style.backgroundPosition = `${-200 * (i % 3)}px ${-200 * Math.floor(i / 3)}px`;
+            original.appendChild(tile);
+        }
+    }
+
+    function swapTwoTiles() {
+        let [i, j] = [Math.floor(Math.random() * 9), Math.floor(Math.random() * 9)];
+        while (i === j) j = Math.floor(Math.random() * 9);
+        lastMove = [i, j];
+        [currentPositions[i], currentPositions[j]] = [currentPositions[j], currentPositions[i]];
+        score++;
+        updateScore();
+        renderPuzzle(imagePath);
+        if (score % 10 === 0) {
+            sendData(false);
+        }
+    }
+
+    function undoSwap() {
+        if (lastMove) {
+            let [i, j] = lastMove;
+            [currentPositions[i], currentPositions[j]] = [currentPositions[j], currentPositions[i]];
+            lastMove = null;
+            renderPuzzle(imagePath);
+        }
+    }
+
+    function updateScore() {
+        document.getElementById('score').innerText = `Score: ${score}`;
+    }
+
+    function checkCompletion() {
+        if (currentPositions.every((val, index) => val === index)) {
+            setTimeout(async () => {
+                alert(`Congrate! You solve this puzzle in ${score} steps!`);
+                await sendData(true);
+                initializePuzzle(imagePath);
+            }, 100);
+        }
+    }
+
+    function showInfo() {
+        alert("Goal: Restore the original image by swapping tiles. Left-click to swap two tiles, Right-click to undo the last move. On mobile, use the Swap and Undo buttons.");;
+    }
+
+    function handleResize() {
+        const mobileControls = document.getElementById('mobile-controls');
+        if (window.innerWidth <= 1310) {
+            mobileControls.style.display = 'flex';
+        } else {
+            mobileControls.style.display = 'none';
+        }
+    }
+
+    window.addEventListener('resize', handleResize);
+
+    window.addEventListener('click', (event) => {
+        if (event.button === 0 && window.innerWidth > 1310) {
+            swapTwoTiles();
+        }
+    });
+
+    window.addEventListener('contextmenu', (event) => {
+        if (window.innerWidth > 1310) {
+            event.preventDefault();
+            undoSwap();
+        }
+    });
+</script>
+</body>
+</html>
