@@ -163,7 +163,11 @@
             const tile = document.createElement('div');
             tile.classList.add('tile');
             tile.style.backgroundImage = `url(${imgSrc})`;
-            tile.style.backgroundPosition = `${-200 * (pos % 3)}px ${-200 * Math.floor(pos / 3)}px`;
+            if (window.innerWidth > 1310) {
+                tile.style.backgroundPosition = `${-200 * (pos % 3)}px ${-200 * Math.floor(pos / 3)}px`;
+            } else {
+                tile.style.backgroundPosition = `${-400 * (pos % 3)}px ${-400 * Math.floor(pos/3)}px`;
+            }
             tile.dataset.index = i;
             puzzle.appendChild(tile);
         });
